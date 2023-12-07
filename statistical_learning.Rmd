@@ -1,0 +1,82 @@
+---
+title: "statistical learning"
+output: github_document
+---
+
+
+
+```{r}
+library(tidyverse)
+library(glmnet)
+
+set.seed(1)
+```
+
+## LASSO
+
+```{r}
+bwt_df = 
+  read_csv("data/birthweight.csv") |> 
+  janitor::clean_names() |>
+  mutate(
+    babysex = as.factor(babysex),
+    babysex = fct_recode(babysex, "male" = "1", "female" = "2"),
+    frace = as.factor(frace),
+    frace = fct_recode(
+      frace, "white" = "1", "black" = "2", "asian" = "3", 
+      "puerto rican" = "4", "other" = "8"),
+    malform = as.logical(malform),
+    mrace = as.factor(mrace),
+    mrace = fct_recode(
+      mrace, "white" = "1", "black" = "2", "asian" = "3", 
+      "puerto rican" = "4")) |> 
+  sample_n(200)
+```
+
+get predictions and outcome.
+
+```{r}
+x = model.matrix(bwt ~ ., bwt_df)[, -1]
+y = bwt_df |> pull(bwt) # outcome
+```
+
+```{r}
+lambda = 10^(seq(3, -2, -0.1)) # 50 lambda values, from 10^3 to 10^-2
+
+lasso_fit = 
+  glmnet(x, y, lambda = lambda)
+
+lasso_cv = # cross validation
+  cv.glmnet(x, y, lambda = lambda)
+
+lambda_opt = lasso_cv$lambda.min
+```
+
+let's look at lasso results!
+
+```{r}
+lasso_fit |>
+  broom::tidy() |>
+  filter(step == 15) # at step 15, what predictors are in the model?
+```
+
+```{r}
+lasso_fit |>
+  broom::tidy() |>
+  select(term, lambda, estimate) |>
+  filter(term != "(Intercept)") |>
+  complete(term, lambda, fill = list(estimate = 0)) |>
+  ggplot(aes(x = log(lambda, 10), y = estimate, color = term, group = term)) +
+  geom_path() +
+  theme(legend.position = "bottom")
+```
+
+Show the CV results.
+
+```{r}
+lasso_cv |>
+  broom::tidy() |>
+  ggplot(aes(x = log(lambda, 10), y = estimate)) +
+  geom_point()
+```
+
